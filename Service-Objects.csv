@@ -1,0 +1,35 @@
+#,name,type,value,description,group
+42,Test-TCP_26100-26299,TCP,26100-26299,,
+43,Test-TCP_32111,TCP,32111,,
+44,Test-TCP_32115,TCP,32115,,test_group2
+45,Test-TCP_3268,TCP,3268,,
+46,Test-TCP_3433,TCP,3433,,
+47,Test-TCP_50000-59999,TCP,50000-59999,,
+48,Test-TCP_50001,TCP,50001,,
+49,Test-TCP_50002,TCP,50002,,test_group2
+1,TEST-Cisco_TNA_TCP_131,TCP,131,,
+2,Test-CMIP_TCP_163,TCP,163,,test_group1
+6,Test-FTP_Data_TCP_20,TCP,20,,
+7,Test-Horizon_MMR_TCP_9427,TCP,9427,,
+10,Test-Kerberos_TCP_88,TCP,88,Kerberos,
+11,Test-Kerberos_UDP_88,UDP,88,Kerberos,test_group1
+12,Test-Kpasswd_TCP_464,TCP,464,Kerberos change/set password,
+13,Test-Kpasswd_UDP_464,UDP,464,Kerberos change/set password,
+15,Test-LDAP_GC_TCP_3269,TCP,3269,,
+16,Test-LDAP_UDP_389,UDP,389,,
+17,Test-LDAPS_TCP_636,TCP,636,,
+18,Test-LDAPS_UDP_636,UDP,636,,
+19,Test-MS_Teams,UDP,3478,,
+23,Test-PCoIP_TCP_4172,TCP,4172,,
+24,Test-PCoIP_UDP_4172,UDP,4172,,test_group1
+26,Test-SAPRTR_TCP_3299,TCP,3299,,
+27,Test-SIP_TLS_TCP_5061,TCP,5061,,
+28,Test-SMB_TCP_445,TCP,,,
+32,Test-UDP_SNMPTRAP,UDP,162,SNMP Traps,
+33,Test-Sunrpc_TCP_111,TCP,111,SUNRPC,
+35,Test-RSH_TCP_514,TCP,514,Remote shell,
+36,Test-TCP_20021,TCP,20021,,test_group2
+37,Test-TCP_2010,TCP,2010,,
+38,Test-TCP_2020,TCP,2020,,
+40,Test-TCP_20990,TCP,20990,,
+41,Test-TCP_22443,TCP,22443,,
