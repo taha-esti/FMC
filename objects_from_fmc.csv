@@ -1,0 +1,48 @@
+name,type,value,description,group
+any-ipv6,Host,::/0,,
+DNS_8.8.8.8,Host,8.8.8.8,test description,
+ESLAB-DC01,Host,10.255.255.21,,
+Infra_172.20.253.2,Host,172.20.253.2,,test_group
+INSIDE_GW,Host,10.255.255.1,,test_group
+Lab_DNS_Srv_10.255.255.21,Host,10.255.255.21,,
+LAB_POD5_AD_SRVR,Host,10.255.27.10,LAB Pod 5 AD Server,LAB_SERVERS
+LAB_POD5_DHCP_SRVR,Host,10.255.27.12,LAB Pod 5 DHCP Server,LAB_SERVERS
+LAB_POD5_DNS_SRVR,Host,10.255.27.11,LAB Pod 5 DNS Server,LAB_SERVERS
+LabFTDGW,Host,204.83.236.254,,
+Outside_DNS_SRVR_1,Host,208.67.222.222,Umbrella DNS Server 1,LAB_SERVERS
+Outside_DNS_SRVR_2,Host,208.67.220.220,Umbrella DNS Server 2,LAB_SERVERS
+Outside_GW_204.83.236.254,Host,204.83.236.254,204.83.236.254,
+RAVPN_DHCP_Scope,Host,192.168.50.0,,
+RAVPN_DHCP_Scope_Mobile,Host,192.168.51.0,,
+test_host,Host,10.10.10.10,,testgroup
+172.20.253.0_29,Network,172.20.253.0/29,,
+any-ipv4,Network,0.0.0.0/0,,
+ESLAB_Client_VPN_Subnet,Network,10.255.254.0/24,,
+Infra_172.20.253.0-29,Network,172.20.253.0/29,test description,
+Inside_192.168.1.0_24,Network,192.168.1.0/24,,
+IPv4-Benchmark-Tests,Network,198.18.0.0/15,,
+IPv4-Link-Local,Network,169.254.0.0/16,,
+IPv4-Multicast,Network,224.0.0.0/4,,
+IPv4-Private-10.0.0.0-8,Network,10.0.0.0/8,,test_group
+IPv4-Private-172.16.0.0-12,Network,172.16.0.0/12,,
+IPv4-Private-192.168.0.0-16,Network,192.168.0.0/16,,
+IPv6-IPv4-Mapped,Network,::ffff:0.0.0.0/96,,
+IPv6-Link-Local,Network,fe80::/10,,
+IPv6-Private-Unique-Local-Addresses,Network,fc00::/7,,
+IPv6-to-IPv4-Relay-Anycast,Network,192.88.99.0/24,,
+LAB_DMZ,Network,10.255.28.0/24,Lab DMZ,LAB_NETWORKS
+LAB_DMZ_1,Network,10.255.28.0/24,Lab DMZ,POD_NETWORKS
+Lab_Inside_192.168.55.0-24,Network,192.168.55.0/24,,
+LAB_POD5_NW,Network,10.255.27.0/24,LAB Pod 5 Network,POD_NETWORKS
+Lab_RA_VPN_Pool_192.168.50.0-24,Network,192.168.50.0/24,,
+LAB_WIFI,Network,10.255.29.0/24,Wi-Fi Lab ,LAB_NETWORKS
+LAB_WIFI_1,Network,10.255.29.0/24,Wi-Fi Lab ,POD_NETWORKS
+testrange,Range,10.10.10.0-10.10.11.0,,
+testfqdn,FQDN,10.10.10.10,,testgroup
+any,NetworkGroup,0.0.0.0/0; ::/0,,
+IPv4-Private-All-RFC1918,NetworkGroup,10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16,,
+LAB_NETWORKS,NetworkGroup,LAB_DMZ; LAB_WIFI,,
+LAB_SERVERS,NetworkGroup,LAB_POD5_AD_SRVR; LAB_POD5_DNS_SRVR; LAB_POD5_DHCP_SRVR; Outside_DNS_SRVR_1; Outside_DNS_SRVR_2,,
+POD_NETWORKS,NetworkGroup,LAB_POD5_NW; LAB_DMZ_1; LAB_WIFI_1,,
+test_group,NetworkGroup,Infra_172.20.253.2; INSIDE_GW; IPv4-Private-10.0.0.0-8,,
+testgroup,NetworkGroup,test_host; testfqdn,,
