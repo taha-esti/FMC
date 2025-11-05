@@ -5,6 +5,7 @@ import os
 from collections import defaultdict
 from requests.auth import HTTPBasicAuth
 import urllib3
+import getpass
 
 # Suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -28,9 +29,9 @@ Usage:
 """
 
 # === FMC Configuration ===
-FMC_HOST = '10.255.255.8'
-FMC_USER = 'apiUser'
-FMC_PASS = 'ESTI2025!'
+FMC_HOST = input("FMC IP address: ")
+FMC_USER = input("FMC Username: ")
+FMC_PASS = getpass.getpass("FMC Password: ")
 DOMAIN_UUID = 'e276abec-e0f2-11e3-8169-6d9ed49b625f'
 BASE_URL = f"https://{FMC_HOST}/api/fmc_config/v1/domain/{DOMAIN_UUID}"
 
