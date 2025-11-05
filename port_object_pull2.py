@@ -18,7 +18,7 @@ Objects included (depending on FMC version/endpoints available):
   - Port groups / protocol port object groups
 
 Output CSV columns:
-  name, type, value, description, group
+  name, protocol, port, description, group
 
 Usage:
     python ports_pull.py
@@ -104,13 +104,12 @@ def fetch_all_port_objects(headers):
         all_objects: list of dicts with:
             - id
             - name
-            - type
-            - value
+            - protocol
+            - port
             - description
         groups_raw: list of full group JSON objects (for membership mapping)
     """
 
-    # Try all common port-related endpoints; some may 404 depending on FMC version.
     collection_urls = [
         f"{BASE_URL}/object/ports?limit=1000",
         f"{BASE_URL}/object/protocolportobjects?limit=1000",
@@ -133,35 +132,27 @@ def fetch_all_port_objects(headers):
             full = fetch_full_object(summary, headers)
 
             obj_id = full.get("id")
-            obj_type = (full.get("type") or summary.get("type") or "").strip()
             name = full.get("name", "")
             desc = full.get("description", "")
+            obj_type = (full.get("type") or summary.get("type") or "").strip()
 
-            # Determine if this is a group by type name containing "Group"
+            # Determine if this is a group
             is_group = "Group" in obj_type
 
-            # Build a "value" string
             if not is_group:
-                # Regular port object: format like TCP/80 or UDP/53-55
+                # Regular port object
                 port = full.get("port") or full.get("value", "")
-                proto = full.get("protocol") or full.get("proto", "")
-                if isinstance(proto, str):
-                    proto = proto.upper()
-                if port and proto:
-                    value = f"{proto}/{port}"
-                else:
-                    value = port or proto or ""
+                protocol = full.get("protocol") or full.get("proto", "")
+                if isinstance(protocol, str):
+                    protocol = protocol.upper()
             else:
-                # Group: summarize members as value
+                # Group object: summarize members
+                protocol = "Group"
                 members = []
-
-                # Objects referenced by ID
                 for m in full.get("objects", []):
                     m_name = m.get("name") or m.get("value")
                     if m_name:
                         members.append(str(m_name))
-
-                # Literal ports (no separate object)
                 for lit in full.get("literals", []):
                     lit_port = lit.get("port") or lit.get("value")
                     lit_proto = lit.get("protocol") or lit.get("proto", "")
@@ -171,15 +162,14 @@ def fetch_all_port_objects(headers):
                         members.append(f"{lit_proto}/{lit_port}")
                     elif lit_port:
                         members.append(str(lit_port))
-
-                value = "; ".join(members)
+                port = "; ".join(members)
                 groups_raw.append(full)
 
             all_objects.append({
                 "id": obj_id,
                 "name": name,
-                "type": obj_type,
-                "value": value,
+                "protocol": protocol,
+                "port": port,
                 "description": desc,
             })
 
@@ -203,14 +193,9 @@ def map_object_to_groups(all_objects, groups_raw):
             if mid:
                 id_to_groups[mid].append(g_name)
 
-        # literals have no ID and can't be mapped back reliably
-
     for obj in all_objects:
         groups = id_to_groups.get(obj["id"], [])
-        if groups:
-            obj["group"] = "; ".join(sorted(set(groups)))
-        else:
-            obj["group"] = ""
+        obj["group"] = "; ".join(sorted(set(groups))) if groups else ""
 
     return all_objects
 
@@ -232,7 +217,7 @@ def main():
     all_objects = map_object_to_groups(all_objects, groups_raw)
 
     # Write CSV
-    header = ["name", "type", "value", "description", "group"]
+    header = ["name", "protocol", "port", "description", "group"]
 
     with open(output_file, "w", newline='', encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -241,8 +226,8 @@ def main():
         for obj in all_objects:
             writer.writerow([
                 obj.get("name", ""),
-                obj.get("type", ""),
-                obj.get("value", ""),
+                obj.get("protocol", ""),
+                obj.get("port", ""),
                 obj.get("description", ""),
                 obj.get("group", ""),
             ])
