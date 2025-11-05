@@ -113,7 +113,7 @@ def fetch_all_port_objects(headers):
     collection_urls = [
         f"{BASE_URL}/object/ports?limit=1000",
         f"{BASE_URL}/object/protocolportobjects?limit=1000",
-        f"{BASE_URL}/object/portgroups?limit=1000",
+        f"{BASE_URL}/object/portobjectgroups?limit=1000",
         f"{BASE_URL}/object/protocolportobjectgroups?limit=1000",
     ]
 
