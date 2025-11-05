@@ -2,6 +2,7 @@ import pandas as pd
 import requests
 from requests.auth import HTTPBasicAuth
 import urllib3
+import getpass
 '''
 This script reads a CSV file containing definitions for various FMC objects (hosts, networks, FQDNs, ranges, URLs)
 and creates them in Cisco FMC via its REST API. It also groups objects into NetworkGroups and UrlGroups based on the CSV data.
@@ -103,9 +104,9 @@ def load_objects(csv_file):
  
 def main():
     # Configuration
-    host = '10.255.255.8'
-    user = 'apiUser'
-    pwd = 'ESTI2025!'
+    host = input("FMC IP address: ")
+    user = input("FMC Username: ")
+    pwd = getpass.getpass("FMC Password: ")
     domain = 'e276abec-e0f2-11e3-8169-6d9ed49b625f'
     csv_file = 'Objects.csv'
  

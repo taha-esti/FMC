@@ -2,6 +2,7 @@ import pandas as pd
 import requests
 from requests.auth import HTTPBasicAuth
 import urllib3
+import getpass
 '''
 This script reads a CSV file containing definitions for various ProtocolPortObjects (services)
 and creates them in Cisco FMC via its REST API. It also groups services into PortObjectGroups
@@ -10,9 +11,9 @@ and creates them in Cisco FMC via its REST API. It also groups services into Por
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # FMC configuration
-FMC_HOST = '10.255.255.8'
-FMC_USER = 'admin'
-FMC_PASS = 'ESit2024!'
+FMC_HOST = input("FMC IP address: ")
+FMC_USER = input("FMC Username: ")
+FMC_PASS = getpass.getpass("FMC Password: ")
 DOMAIN_UUID = 'e276abec-e0f2-11e3-8169-6d9ed49b625f'
 SERVICE_FILE = 'Service-Objects.csv'
 BASE_URL = f"https://{FMC_HOST}/api/fmc_config/v1/domain/{DOMAIN_UUID}"
