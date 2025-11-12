@@ -1,8 +1,10 @@
 import requests
+import time
 import sys
 import csv
 import os
 from requests.auth import HTTPBasicAuth
+from urllib.parse import urljoin
 import urllib3
 import getpass
 
@@ -40,17 +42,35 @@ def get_policy_id(headers, policy_name):
             return item['id']
     raise ValueError(f"Policy '{policy_name}' not found")
 
-def list_rules(headers, policy_id, limit=1000):
-    """Return the summary list of rules for the policy."""
-    url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules?limit={limit}"
-    r = requests.get(url, headers=headers, verify=False)
-    r.raise_for_status()
-    return r.json().get('items', [])
+def list_rules(headers, policy_id, limit=100, expanded=True):
+    """
+    Return ALL rules from the policy using pagination.
+    If expanded=True, FMC returns full rule objects (so we can avoid per-rule GETs).
+    Falls back to non-expanded if needed.
+    """
+    params = f"limit={limit}"
+    if expanded:
+        params += "&expanded=true"
+    url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules?{params}"
+
+    items = []
+    while True:
+        r = _request_with_retry("GET", url, headers=headers, verify=False)
+        data = r.json()
+        batch = data.get("items", [])
+        items.extend(batch)
+
+        paging = data.get("paging") or {}
+        next_href = (paging.get("next") or {}).get("href")
+        if not next_href:
+            break
+        # next_href is a full path; join with base host in case it’s relative
+        url = urljoin(f"https://{FMC_HOST}", next_href)
+    return items
 
 def fetch_access_rule(headers, policy_id, rule_id):
     url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules/{rule_id}"
-    r = requests.get(url, headers=headers, verify=False)
-    r.raise_for_status()
+    r = _request_with_retry("GET", url, headers=headers, verify=False)
     return r.json()
 
 # === Helper formatters ===
@@ -117,6 +137,33 @@ def _format_comments(rule):
         if texts:
             return " | ".join(texts)
     return ""
+
+def _request_with_retry(method, url, headers=None, verify=False, max_retries=5, backoff_base=0.8):
+    """
+    Do a requests.<method> with 429/5xx retry and exponential backoff.
+    Respects Retry-After header if present.
+    """
+    for attempt in range(1, max_retries + 1):
+        r = requests.request(method, url, headers=headers, verify=verify)
+        # Success
+        if r.status_code < 400:
+            return r
+        # Handle 429 / 5xx with backoff
+        if r.status_code == 429 or 500 <= r.status_code < 600:
+            retry_after = r.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    wait = float(retry_after)
+                except ValueError:
+                    wait = backoff_base * (2 ** (attempt - 1))
+            else:
+                wait = backoff_base * (2 ** (attempt - 1))
+            time.sleep(wait)
+            continue
+        # Other errors: raise immediately
+        r.raise_for_status()
+    # If we’re here, we exhausted retries
+    r.raise_for_status()
 
 def extract_rule_info(rule):
     """Extract all required fields for CSV output."""
@@ -215,11 +262,18 @@ def main():
         writer.writerow(header)
 
         for item in rules_summary:
-            rule_id = item.get("id")
-            if not rule_id:
-                continue
-            rule_json = fetch_access_rule(headers, policy_id, rule_id)
-            row = extract_rule_info(rule_json)
+            # If expanded=true delivered full rule objects, great.
+            # Some FMC versions may still give partials; we detect and fetch detail as needed.
+            rule_obj = item
+            # Heuristic: if some expected fields are missing (e.g., sourcePorts, intrusionPolicy),
+            # fetch the full rule with backoff (rate-limit safe).
+            needs_detail = not any(k in item for k in ("sourcePorts", "destinationPorts", "intrusionPolicy", "applications"))
+            if needs_detail and item.get("id"):
+                rule_obj = fetch_access_rule(headers, policy_id, item["id"])
+                # Tiny courtesy delay to be gentle on rate limits (optional)
+                time.sleep(0.05)
+
+            row = extract_rule_info(rule_obj)
             writer.writerow(row)
 
     print(f"✅ CSV file created: {os.path.abspath(output_file)}")
