@@ -24,27 +24,21 @@ FMC_PASS = getpass.getpass("FMC Password: ")
 DOMAIN_UUID = 'e276abec-e0f2-11e3-8169-6d9ed49b625f'
 BASE_URL = f"https://{FMC_HOST}/api/fmc_config/v1/domain/{DOMAIN_UUID}"
 
-
 # === Functions ===
-
 def get_token():
     url = f"https://{FMC_HOST}/api/fmc_platform/v1/auth/generatetoken"
     r = requests.post(url, auth=HTTPBasicAuth(FMC_USER, FMC_PASS), verify=False)
     r.raise_for_status()
     return r.headers['X-auth-access-token']
 
-
 def get_policy_id(headers, policy_name):
     url = f"{BASE_URL}/policy/accesspolicies"
     r = requests.get(url, headers=headers, verify=False)
     r.raise_for_status()
-
     for item in r.json().get('items', []):
         if item.get('name') == policy_name:
             return item['id']
-
     raise ValueError(f"Policy '{policy_name}' not found")
-
 
 def list_rules(headers, policy_id, limit=1000):
     """Return the summary list of rules for the policy."""
@@ -53,16 +47,13 @@ def list_rules(headers, policy_id, limit=1000):
     r.raise_for_status()
     return r.json().get('items', [])
 
-
 def fetch_access_rule(headers, policy_id, rule_id):
     url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules/{rule_id}"
     r = requests.get(url, headers=headers, verify=False)
     r.raise_for_status()
     return r.json()
 
-
 # === Helper formatters ===
-
 def _format_objects_and_literals(obj):
     """Helper to combine FMC objects and literals into a readable string."""
     if not obj:
@@ -78,7 +69,6 @@ def _format_objects_and_literals(obj):
             parts.append(str(val))
     return "; ".join(parts)
 
-
 def _format_app_filters(rule):
     """Extract application filters and applications."""
     parts = []
@@ -89,7 +79,6 @@ def _format_app_filters(rule):
                 name = item.get("name") or item.get("value")
                 if name:
                     parts.append(str(name))
-
     apps = rule.get("applications")
     if isinstance(apps, dict):
         for item in apps.get("applications", []):
@@ -97,7 +86,6 @@ def _format_app_filters(rule):
             if name:
                 parts.append(str(name))
     return "; ".join(parts)
-
 
 def _get_bool_field(rule, *keys):
     """Return boolean-like fields as True/False or empty."""
@@ -110,25 +98,17 @@ def _get_bool_field(rule, *keys):
                 return val
     return ""
 
-
 def _format_comments(rule):
     """Extract comments or descriptions, including comment history."""
-    # 1) Simple string fields first
     for k in ("comments", "comment", "description"):
         val = rule.get(k)
         if isinstance(val, str):
             return val
-
-    # 2) List of simple comments
     comments = rule.get("comments")
     if isinstance(comments, list):
         return "; ".join(str(c) for c in comments)
-
-    # 3) commentHistoryList (most common in FMC)
     history = rule.get("commentHistoryList")
     if isinstance(history, list) and history:
-        # You can either join all comments, or just take the latest one.
-        # Option A: join all comments (oldest → newest)
         texts = []
         for entry in history:
             c = entry.get("comment")
@@ -136,17 +116,14 @@ def _format_comments(rule):
                 texts.append(str(c))
         if texts:
             return " | ".join(texts)
-
-        # If somehow no 'comment' fields, fall through to empty
-
     return ""
-
-
 
 def extract_rule_info(rule):
     """Extract all required fields for CSV output."""
     rule_name = rule.get("name", "")
     action = rule.get("action", "")
+    enabled = _get_bool_field(rule, "enabled")  # <-- NEW
+
     source_zones = _format_objects_and_literals(rule.get("sourceZones"))
     destination_zones = _format_objects_and_literals(rule.get("destinationZones"))
     source_networks = _format_objects_and_literals(rule.get("sourceNetworks"))
@@ -170,6 +147,7 @@ def extract_rule_info(rule):
     return [
         rule_name,
         action,
+        enabled,
         source_zones,
         destination_zones,
         source_networks,
@@ -183,9 +161,7 @@ def extract_rule_info(rule):
         comments,
     ]
 
-
 # === Main ===
-
 def main():
     if len(sys.argv) != 2:
         print("Usage: python policy_pull.py \"<PolicyName>\"")
@@ -194,6 +170,9 @@ def main():
     policy_name = sys.argv[1]
     safe_filename = policy_name.replace(" ", "_").replace("/", "_")
     output_file = f"outputs/{safe_filename}_rules.csv"
+
+    # Ensure outputs directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     token = get_token()
     headers = {
@@ -217,6 +196,7 @@ def main():
     header = [
         "Rule Name",
         "Action",
+        "Enabled",  # <-- NEW
         "Source Zones",
         "Destination Zones",
         "Source Networks",
@@ -243,7 +223,6 @@ def main():
             writer.writerow(row)
 
     print(f"✅ CSV file created: {os.path.abspath(output_file)}")
-
 
 if __name__ == "__main__":
     main()
