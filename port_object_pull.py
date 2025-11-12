@@ -204,7 +204,7 @@ def map_object_to_groups(all_objects, groups_raw):
 # === Main ===
 
 def main():
-    output_file = "port_objects_fmc.csv"
+    output_file = "outputs/port_objects_fmc.csv"
 
     token = get_token()
     headers = {

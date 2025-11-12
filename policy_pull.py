@@ -193,7 +193,7 @@ def main():
 
     policy_name = sys.argv[1]
     safe_filename = policy_name.replace(" ", "_").replace("/", "_")
-    output_file = f"{safe_filename}_rules.csv"
+    output_file = f"outputs/{safe_filename}_rules.csv"
 
     token = get_token()
     headers = {
