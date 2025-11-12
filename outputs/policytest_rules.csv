@@ -1,3 +1,0 @@
-Rule Name,Action,Source Zones,Destination Zones,Source Networks,Destination Networks,Application filters,Source Ports,Destination Ports,Intrusion Policy,Log at Beginning of Connection,Log at End of Connection,Comments
-Rule2,ALLOW,Inside,Outside,172.20.253.0_29,ESLAB_Client_VPN_Subnet,123Movies,LDAP,Bittorrent,Balanced Security and Connectivity,True,True,test comment
-test39,ALLOW,Inside,Outside,LAB_DMZ_1; IPv4-Link-Local,LAB_WIFI_1,,AOL,Bittorrent,,False,False,
