@@ -44,9 +44,8 @@ def get_policy_id(headers, policy_name):
 
 def list_rules(headers, policy_id, limit=100, expanded=True):
     """
-    Return ALL rules from the policy using pagination.
-    If expanded=True, FMC returns full rule objects (so we can avoid per-rule GETs).
-    Falls back to non-expanded if needed.
+    Return ALL rules, paginating defensively across FMC variants.
+    If expanded=True, try to get full rule bodies in the list response.
     """
     params = f"limit={limit}"
     if expanded:
@@ -54,18 +53,20 @@ def list_rules(headers, policy_id, limit=100, expanded=True):
     url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules?{params}"
 
     items = []
-    while True:
+    while url:
         r = _request_with_retry("GET", url, headers=headers, verify=False)
         data = r.json()
-        batch = data.get("items", [])
-        items.extend(batch)
+        items.extend(data.get("items", []))
 
-        paging = data.get("paging") or {}
-        next_href = (paging.get("next") or {}).get("href")
-        if not next_href:
-            break
-        # next_href is a full path; join with base host in case it’s relative
-        url = urljoin(f"https://{FMC_HOST}", next_href)
+        next_href = _extract_next_url(data)
+        if next_href:
+            # next_href might be absolute or relative; urljoin is safe for both
+            url = urljoin(f"https://{FMC_HOST}", next_href)
+            # be gentle on rate limits
+            time.sleep(0.05)
+        else:
+            url = None
+
     return items
 
 def fetch_access_rule(headers, policy_id, rule_id):
@@ -139,31 +140,58 @@ def _format_comments(rule):
     return ""
 
 def _request_with_retry(method, url, headers=None, verify=False, max_retries=5, backoff_base=0.8):
-    """
-    Do a requests.<method> with 429/5xx retry and exponential backoff.
-    Respects Retry-After header if present.
-    """
     for attempt in range(1, max_retries + 1):
         r = requests.request(method, url, headers=headers, verify=verify)
-        # Success
         if r.status_code < 400:
             return r
-        # Handle 429 / 5xx with backoff
         if r.status_code == 429 or 500 <= r.status_code < 600:
             retry_after = r.headers.get("Retry-After")
-            if retry_after:
-                try:
-                    wait = float(retry_after)
-                except ValueError:
-                    wait = backoff_base * (2 ** (attempt - 1))
-            else:
+            try:
+                wait = float(retry_after) if retry_after else backoff_base * (2 ** (attempt - 1))
+            except ValueError:
                 wait = backoff_base * (2 ** (attempt - 1))
             time.sleep(wait)
             continue
-        # Other errors: raise immediately
         r.raise_for_status()
-    # If we’re here, we exhausted retries
     r.raise_for_status()
+
+def _extract_next_url(data):
+    """
+    Handle FMC pagination across variants:
+      1) data["paging"] = {"next": {"href": "..."}}
+      2) data["paging"] = [{"next": {"href": "..."}}]  (or items with "href" directly)
+      3) data["links"]  = [{"rel": "next", "href": "..."}]
+    Returns the next URL (string) or None.
+    """
+    paging = data.get("paging")
+
+    # Variant 1: dict with next.href
+    if isinstance(paging, dict):
+        nxt = paging.get("next")
+        if isinstance(nxt, dict) and nxt.get("href"):
+            return nxt["href"]
+        # Some builds put href directly under paging
+        if paging.get("href"):
+            return paging["href"]
+
+    # Variant 2: list of paging records
+    if isinstance(paging, list):
+        for entry in paging:
+            if isinstance(entry, dict):
+                nxt = entry.get("next")
+                if isinstance(nxt, dict) and nxt.get("href"):
+                    return nxt["href"]
+                if entry.get("href"):
+                    return entry["href"]
+
+    # Variant 3: top-level links with rel=next
+    links = data.get("links")
+    if isinstance(links, list):
+        for link in links:
+            if isinstance(link, dict) and link.get("rel") == "next" and link.get("href"):
+                return link["href"]
+
+    return None
 
 def extract_rule_info(rule):
     """Extract all required fields for CSV output."""
