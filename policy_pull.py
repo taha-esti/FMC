@@ -20,7 +20,7 @@ Usage:
 """
 
 # === FMC Configuration ===
-FMC_HOST = input("FMC IP address: ")
+FMC_HOST = "10.255.255.8"
 FMC_USER = input("FMC Username: ")
 FMC_PASS = getpass.getpass("FMC Password: ")
 DOMAIN_UUID = 'e276abec-e0f2-11e3-8169-6d9ed49b625f'
@@ -183,11 +183,37 @@ def _request_with_retry(method, url, headers=None, verify=False, max_retries=5, 
     # If we’re here, we exhausted retries
     r.raise_for_status()
 
+def _extract_metadata_field(rule, key):
+    """
+    Try to pull a string field from either the rule itself
+    or from rule['metadata'][key].
+    """
+    # Sometimes it might be directly on the rule (rare but cheap to check)
+    direct = rule.get(key)
+    if isinstance(direct, str):
+        return direct
+
+    meta = rule.get("metadata")
+    if isinstance(meta, dict):
+        val = meta.get(key)
+        if isinstance(val, str):
+            return val
+
+    return ""
+
+
 def extract_rule_info(rule):
     """Extract all required fields for CSV output."""
     rule_name = rule.get("name", "")
     action = rule.get("action", "")
-    enabled = _get_bool_field(rule, "enabled")  # <-- NEW
+    enabled = _get_bool_field(rule, "enabled")
+    meta = rule.get("metadata", {})
+    section = meta.get("section", "")
+    category = meta.get("category", "")
+    if category == "--Undefined--":
+        category = ""
+    # section = _extract_metadata_field(rule, "section")
+    # category = _extract_metadata_field(rule, "category")
 
     source_zones = _format_objects_and_literals(rule.get("sourceZones"))
     destination_zones = _format_objects_and_literals(rule.get("destinationZones"))
@@ -213,6 +239,8 @@ def extract_rule_info(rule):
         rule_name,
         action,
         enabled,
+        section,
+        category,
         source_zones,
         destination_zones,
         source_networks,
@@ -258,10 +286,13 @@ def main():
     rules_summary = list_rules(headers, policy_id)
     print(f"📋 Number of rules found: {len(rules_summary)}")
 
+
     header = [
         "Rule Name",
         "Action",
-        "Enabled",  # <-- NEW
+        "Enabled",
+        "Section",
+        "Category",
         "Source Zones",
         "Destination Zones",
         "Source Networks",
@@ -292,6 +323,8 @@ def main():
                 time.sleep(0.05)
 
             row = extract_rule_info(rule_obj)
+
+            print(row[0], " | section:", row[2], " | category:", row[4])
             writer.writerow(row)
 
     print(f"✅ CSV file created: {os.path.abspath(output_file)}")
