@@ -212,8 +212,6 @@ def extract_rule_info(rule):
     category = meta.get("category", "")
     if category == "--Undefined--":
         category = ""
-    # section = _extract_metadata_field(rule, "section")
-    # category = _extract_metadata_field(rule, "category")
 
     source_zones = _format_objects_and_literals(rule.get("sourceZones"))
     destination_zones = _format_objects_and_literals(rule.get("destinationZones"))
@@ -323,8 +321,6 @@ def main():
                 time.sleep(0.05)
 
             row = extract_rule_info(rule_obj)
-
-            print(row[0], " | section:", row[2], " | category:", row[4])
             writer.writerow(row)
 
     print(f"✅ CSV file created: {os.path.abspath(output_file)}")
