@@ -42,32 +42,49 @@ def get_policy_id(headers, policy_name):
             return item['id']
     raise ValueError(f"Policy '{policy_name}' not found")
 
-def list_rules(headers, policy_id, limit=100, expanded=True):
-    """
-    Return ALL rules, paginating defensively across FMC variants.
-    If expanded=True, try to get full rule bodies in the list response.
-    """
-    params = f"limit={limit}"
-    if expanded:
-        params += "&expanded=true"
-    url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules?{params}"
+def list_rules(headers, policy_id):
+    rules = []
+    url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules?expanded=true&limit=1000"
 
-    items = []
     while url:
-        r = _request_with_retry("GET", url, headers=headers, verify=False)
+        r = requests.get(url, headers=headers, verify=False)
+        r.raise_for_status()
         data = r.json()
-        items.extend(data.get("items", []))
 
-        next_href = _extract_next_url(data)
-        if next_href:
-            # next_href might be absolute or relative; urljoin is safe for both
-            url = urljoin(f"https://{FMC_HOST}", next_href)
-            # be gentle on rate limits
-            time.sleep(0.05)
-        else:
-            url = None
+        items = data.get("items", [])
+        rules.extend(items)
 
-    return items
+        paging = data.get("paging")
+        next_href = None
+
+        # Case 1: paging is a dict (most common FMC shape)
+        if isinstance(paging, dict):
+            # Sometimes next is directly under paging["next"]["href"]
+            if isinstance(paging.get("next"), dict):
+                next_href = paging["next"].get("href")
+            # Sometimes there's a pages sub-object: paging["pages"]["next"]["href"]
+            elif isinstance(paging.get("pages"), dict):
+                next_href = (paging["pages"].get("next") or {}).get("href")
+            # Very rare: href directly on paging
+            elif "href" in paging:
+                next_href = paging.get("href")
+
+        # Case 2: paging is a list (what you’re seeing now)
+        elif isinstance(paging, list) and paging:
+            first = paging[0]
+            if isinstance(first, dict):
+                if isinstance(first.get("next"), dict):
+                    next_href = first["next"].get("href")
+                elif isinstance(first.get("pages"), dict):
+                    next_href = (first["pages"].get("next") or {}).get("href")
+                elif "href" in first:
+                    next_href = first.get("href")
+
+        # If we didn't find a next_href, stop paginating
+        url = next_href
+
+    return rules
+
 
 def fetch_access_rule(headers, policy_id, rule_id):
     url = f"{BASE_URL}/policy/accesspolicies/{policy_id}/accessrules/{rule_id}"
@@ -140,58 +157,31 @@ def _format_comments(rule):
     return ""
 
 def _request_with_retry(method, url, headers=None, verify=False, max_retries=5, backoff_base=0.8):
+    """
+    Do a requests.<method> with 429/5xx retry and exponential backoff.
+    Respects Retry-After header if present.
+    """
     for attempt in range(1, max_retries + 1):
         r = requests.request(method, url, headers=headers, verify=verify)
+        # Success
         if r.status_code < 400:
             return r
+        # Handle 429 / 5xx with backoff
         if r.status_code == 429 or 500 <= r.status_code < 600:
             retry_after = r.headers.get("Retry-After")
-            try:
-                wait = float(retry_after) if retry_after else backoff_base * (2 ** (attempt - 1))
-            except ValueError:
+            if retry_after:
+                try:
+                    wait = float(retry_after)
+                except ValueError:
+                    wait = backoff_base * (2 ** (attempt - 1))
+            else:
                 wait = backoff_base * (2 ** (attempt - 1))
             time.sleep(wait)
             continue
+        # Other errors: raise immediately
         r.raise_for_status()
+    # If we’re here, we exhausted retries
     r.raise_for_status()
-
-def _extract_next_url(data):
-    """
-    Handle FMC pagination across variants:
-      1) data["paging"] = {"next": {"href": "..."}}
-      2) data["paging"] = [{"next": {"href": "..."}}]  (or items with "href" directly)
-      3) data["links"]  = [{"rel": "next", "href": "..."}]
-    Returns the next URL (string) or None.
-    """
-    paging = data.get("paging")
-
-    # Variant 1: dict with next.href
-    if isinstance(paging, dict):
-        nxt = paging.get("next")
-        if isinstance(nxt, dict) and nxt.get("href"):
-            return nxt["href"]
-        # Some builds put href directly under paging
-        if paging.get("href"):
-            return paging["href"]
-
-    # Variant 2: list of paging records
-    if isinstance(paging, list):
-        for entry in paging:
-            if isinstance(entry, dict):
-                nxt = entry.get("next")
-                if isinstance(nxt, dict) and nxt.get("href"):
-                    return nxt["href"]
-                if entry.get("href"):
-                    return entry["href"]
-
-    # Variant 3: top-level links with rel=next
-    links = data.get("links")
-    if isinstance(links, list):
-        for link in links:
-            if isinstance(link, dict) and link.get("rel") == "next" and link.get("href"):
-                return link["href"]
-
-    return None
 
 def extract_rule_info(rule):
     """Extract all required fields for CSV output."""
