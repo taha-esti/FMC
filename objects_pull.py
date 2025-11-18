@@ -56,19 +56,33 @@ def get_all_items(url, headers):
     next_url = url
 
     while next_url:
+        # Always expect next_url to be a string here
         r = requests.get(next_url, headers=headers, verify=False)
         r.raise_for_status()
         data = r.json()
 
-        items.extend(data.get("items", []))
+        # Collect items if present
+        if isinstance(data.get("items"), list):
+            items.extend(data["items"])
 
+        # Paging can live under either 'paging' or 'metadata.paging'
         paging = data.get("paging") or data.get("metadata", {}).get("paging")
-        if paging and paging.get("next"):
-            next_url = paging["next"]
+
+        if paging:
+            nxt = paging.get("next")
+            if isinstance(nxt, str):
+                # Some FMC versions return the next URL directly as a string
+                next_url = nxt
+            elif isinstance(nxt, dict):
+                # Others return a dict like {"href": "https://..."}
+                next_url = nxt.get("href")
+            else:
+                next_url = None
         else:
             next_url = None
 
     return items
+
 
 
 def fetch_full_object(item, headers):
