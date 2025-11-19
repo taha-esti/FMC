@@ -45,6 +45,7 @@ def get_token():
     r.raise_for_status()
     return r.headers['X-auth-access-token']
 
+
 def get_with_retry(url, headers, max_retries=5):
     """
     Wrapper around requests.get that retries on HTTP 429 with exponential backoff.
@@ -56,7 +57,6 @@ def get_with_retry(url, headers, max_retries=5):
 
         # Handle rate limiting
         if r.status_code == 429:
-            # Try Retry-After header first
             retry_after = r.headers.get("Retry-After")
             if retry_after is not None:
                 try:
@@ -75,9 +75,7 @@ def get_with_retry(url, headers, max_retries=5):
         r.raise_for_status()
         return r
 
-    # If we exit the loop, we never got a non-429 success
     raise requests.HTTPError(f"Too many 429 responses for {url}")
-
 
 
 # === Generic paging helper ===
@@ -85,17 +83,15 @@ def get_with_retry(url, headers, max_retries=5):
 def get_all_items(url, headers):
     """
     Fetch all items from an FMC collection endpoint, following paging if present.
-    Returns the raw 'items' list (summary objects).
+    Returns the raw 'items' list (each item is already expanded when using expanded=true).
     """
     items = []
     next_url = url
 
     while next_url:
-        # Always expect next_url to be a string here
         r = get_with_retry(next_url, headers=headers)
         data = r.json()
 
-        # Collect items if present
         if isinstance(data.get("items"), list):
             items.extend(data["items"])
 
@@ -105,31 +101,18 @@ def get_all_items(url, headers):
         if paging:
             nxt = paging.get("next")
             if isinstance(nxt, str):
-                # Some FMC versions return the next URL directly as a string
                 next_url = nxt
             elif isinstance(nxt, dict):
-                # Others return a dict like {"href": "https://..."}
                 next_url = nxt.get("href")
             else:
                 next_url = None
         else:
             next_url = None
 
+        # Small sleep between pages to be extra nice to FMC
+        time.sleep(0.1)
+
     return items
-
-
-
-def fetch_full_object(item, headers):
-    """
-    Given a summary object, fetch the full object from its self link (if present).
-    Falls back to the summary if no self link exists.
-    """
-    self_link = item.get("links", {}).get("self")
-    if not self_link:
-        return item
-
-    r = get_with_retry(self_link, headers=headers)
-    return r.json()
 
 
 # === Object fetching / processing ===
@@ -137,6 +120,9 @@ def fetch_full_object(item, headers):
 def fetch_all_objects(headers):
     """
     Fetch hosts, networks, ranges, FQDNs, and network groups.
+
+    Uses ?expanded=true so each item in 'items' is already a full object,
+    avoiding one GET per object (which was causing 429 rate limits).
 
     Returns:
         all_objects: list of dicts with:
@@ -147,12 +133,13 @@ def fetch_all_objects(headers):
             - description
         groups_raw: list of full NetworkGroup JSON objects
     """
+    # Use expanded=true so we don't have to fetch each object individually
     collection_urls = [
-        f"{BASE_URL}/object/hosts?limit=1000",
-        f"{BASE_URL}/object/networks?limit=1000",
-        f"{BASE_URL}/object/ranges?limit=1000",
-        f"{BASE_URL}/object/fqdns?limit=1000",
-        f"{BASE_URL}/object/networkgroups?limit=1000",
+        f"{BASE_URL}/object/hosts?limit=500&expanded=true",
+        f"{BASE_URL}/object/networks?limit=500&expanded=true",
+        f"{BASE_URL}/object/ranges?limit=500&expanded=true",
+        f"{BASE_URL}/object/fqdns?limit=500&expanded=true",
+        f"{BASE_URL}/object/networkgroups?limit=200&expanded=true",
     ]
 
     all_objects = []
@@ -160,26 +147,20 @@ def fetch_all_objects(headers):
 
     for url in collection_urls:
         print(f"📥 Fetching from {url} ...")
-        summary_items = get_all_items(url, headers)
-        print(f"   → {len(summary_items)} items (summary)")
+        items = get_all_items(url, headers)
+        print(f"   → {len(items)} items (expanded)")
 
-        for summary in summary_items:
-            full = fetch_full_object(summary, headers)
-
+        for full in items:
             obj_id = full.get("id")
-            obj_type = full.get("type") or summary.get("type", "")
+            obj_type = full.get("type", "")
             name = full.get("name", "")
             desc = full.get("description", "")
 
-            # Default value
             value = ""
 
-            # Normalize type a bit – FMC types are usually "Host", "Network", etc.
             if obj_type in ("Host", "Network", "Range"):
-                # IPv4/IPv6 host/network/range objects
                 value = full.get("value", "")
             elif obj_type == "FQDN":
-                # FQDN objects may use 'value' or 'fqdn' depending on version
                 value = full.get("value") or full.get("fqdn", "")
             elif obj_type == "NetworkGroup":
                 # For groups, summarize members as value
@@ -239,6 +220,7 @@ def map_object_to_groups(all_objects, groups_raw):
 
 def main():
     output_file = "outputs/fmc_objects.csv"
+    os.makedirs("outputs", exist_ok=True)
 
     token = get_token()
     headers = {
