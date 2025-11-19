@@ -6,6 +6,7 @@ from collections import defaultdict
 from requests.auth import HTTPBasicAuth
 import urllib3
 import getpass
+import time
 
 # Suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,6 +45,40 @@ def get_token():
     r.raise_for_status()
     return r.headers['X-auth-access-token']
 
+def get_with_retry(url, headers, max_retries=5):
+    """
+    Wrapper around requests.get that retries on HTTP 429 with exponential backoff.
+    """
+    backoff = 1  # starting backoff in seconds
+
+    for attempt in range(1, max_retries + 1):
+        r = requests.get(url, headers=headers, verify=False)
+
+        # Handle rate limiting
+        if r.status_code == 429:
+            # Try Retry-After header first
+            retry_after = r.headers.get("Retry-After")
+            if retry_after is not None:
+                try:
+                    wait = int(retry_after)
+                except ValueError:
+                    wait = backoff
+            else:
+                wait = backoff
+
+            print(f"⚠️ 429 from {url} (attempt {attempt}/{max_retries}), sleeping {wait} seconds...")
+            time.sleep(wait)
+            backoff = min(backoff * 2, 60)  # cap the backoff
+            continue
+
+        # For anything else, raise if it's bad; return if OK
+        r.raise_for_status()
+        return r
+
+    # If we exit the loop, we never got a non-429 success
+    raise requests.HTTPError(f"Too many 429 responses for {url}")
+
+
 
 # === Generic paging helper ===
 
@@ -57,8 +92,7 @@ def get_all_items(url, headers):
 
     while next_url:
         # Always expect next_url to be a string here
-        r = requests.get(next_url, headers=headers, verify=False)
-        r.raise_for_status()
+        r = get_with_retry(next_url, headers=headers)
         data = r.json()
 
         # Collect items if present
@@ -94,8 +128,7 @@ def fetch_full_object(item, headers):
     if not self_link:
         return item
 
-    r = requests.get(self_link, headers=headers, verify=False)
-    r.raise_for_status()
+    r = get_with_retry(self_link, headers=headers)
     return r.json()
 
 
